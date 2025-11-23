@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The X Chase - Phone Asset Generator (V7)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        
+        /* 라이브 프리뷰 스크롤바 */
+        .phone-scroll::-webkit-scrollbar { width: 4px; }
+        .phone-scroll::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 4px; }
+        
+        /* --------------------------------- */
+        /* 메신저 핵심 스타일 (V7: 캡처 오류 방지를 위해 4개 모서리 값을 명시적으로 정의) */
+        /* --------------------------------- */
+        
+        /* 나 (My Bubble): Top-Right 0 */
+        .bubble-me-v7 {
+            background-color: #FEE500;
+            /* T-L, T-R, B-R, B-L */
+            border-radius: 12px 0 12px 12px; 
+            padding: 10px 14px;
+            font-size: 15px;
+            line-height: 1.4;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+            max-width: 100%;
+            word-break: break-all;
+            display: inline-block;
+        }
+        
+        /* 상대방 (Other Bubble): Top-Left 0 */
+        .bubble-other-v7 {
+            background-color: #FFFFFF;
+             /* T-L, T-R, B-R, B-L */
+            border-radius: 0 12px 12px 12px;
+            padding: 10px 14px;
+            font-size: 15px;
+            line-height: 1.4;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+            max-width: 100%;
+            word-break: break-all;
+            display: inline-block;
+        }
+        .profile-img-fit { width: 100%; height: 100%; object-fit: cover; }
+        
+        /* 프리뷰 Wrapper (화면 크기 조절에 대응) */
+        #preview-wrapper {
+            width: 375px;
+            height: 667px;
+            transform-origin: top center;
+            transition: transform 0.2s ease;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            overflow: hidden; 
+        }
+
+        /* 커스텀 메시지 박스 스타일 */
+        #custom-message-box {
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden" onload="initApp()" onresize="fitScreen()">
+
+    <!-- Header -->
+    <header class="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md shrink-0 z-50">
+        <h1 class="text-xl font-bold"><i class="fas fa-mobile-alt mr-2"></i>The X Chase 에셋 생성기 (V7)</h1>
+        <button onclick="downloadImage()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow transition flex items-center">
+            <i class="fas fa-download mr-2"></i>이미지로 저장 (미리보기 화면과 동일 / 750px W)
+        </button>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Left Panel: Controls -->
+        <div class="w-1/3 bg-white p-6 overflow-y-auto border-r border-gray-200 shadow-lg z-20">
+            
+            <!-- Mode Selection -->
+            <div class="flex space-x-2 mb-6 bg-gray-100 p-1 rounded-lg">
+                <button onclick="setMode('messenger')" id="btn-messenger" class="flex-1 py-2 rounded-md font-bold text-sm bg-white shadow text-gray-800 transition">메신저</button>
+                <button onclick="setMode('call')" id="btn-call" class="flex-1 py-2 rounded-md font-bold text-sm text-gray-500 hover:bg-white transition">통화 기록</button>
+                <button onclick="setMode('memo')" onclick="setMode('memo')" id="btn-memo" class="flex-1 py-2 rounded-md font-bold text-sm text-gray-500 hover:bg-white transition">메모장</button>
+            </div>
+
+            <!-- Controls: Messenger -->
+            <div id="controls-messenger" class="space-y-4">
+                <h3 class="font-bold text-lg border-b pb-2">메시지 설정</h3>
+                
+                <div class="bg-gray-50 p-3 rounded-md border">
+                    <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">상대방 프로필</label>
+                    <div class="mb-2">
+                        <label class="block text-sm font-medium text-gray-700">이름</label>
+                        <input type="text" id="msg-name" value="김도준" oninput="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">프로필 사진</label>
+                        <input type="file" id="msg-profile-upload" accept="image/*" onchange="handleProfileUpload(this)" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-4 bg-gray-50 p-3 rounded-lg">
+                    <span class="text-sm font-bold">발신자:</span>
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="radio" name="sender" value="other" checked onchange="renderContent()" class="form-radio text-yellow-500 focus:ring-yellow-500">
+                        <span class="ml-2 text-sm">상대방</span>
+                    </label>
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="radio" name="sender" value="me" onchange="renderContent()" class="form-radio text-yellow-500 focus:ring-yellow-500">
+                        <span class="ml-2 text-sm">나</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">시간</label>
+                    <input type="text" id="msg-time" value="오후 9:30" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">내용</label>
+                    <textarea id="msg-text" rows="3" class="mt-1 block w-full border border-gray-300 rounded-md p-2" placeholder="내용을 입력하세요"></textarea>
+                </div>
+                <button onclick="addMessage()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-md transition shadow">메시지 추가</button>
+                <button onclick="clearMessages()" class="w-full bg-red-100 hover:bg-red-200 text-red-600 font-bold py-2 rounded-md transition mt-2">초기화</button>
+            </div>
+
+            <!-- Controls: Call Log (Hidden) -->
+            <div id="controls-call" class="hidden space-y-4">
+                <h3 class="font-bold text-lg border-b pb-2">통화 기록 설정</h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">이름 / 번호</label>
+                    <input type="text" id="call-name" value="정세연" oninput="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">유형</label>
+                    <select id="call-type" onchange="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                        <option value="missed">부재중 전화 (빨강)</option>
+                        <option value="incoming">수신됨/발신됨 (검정)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">날짜 / 시간</label>
+                    <input type="text" id="call-time" value="어제" oninput="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                </div>
+                 <div>
+                    <label class="block text-sm font-medium text-gray-700">라벨</label>
+                    <input type="text" id="call-label" value="휴대전화" oninput="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2 text-gray-500">
+                </div>
+                <button onclick="addCallLog()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-md transition shadow">기록 추가</button>
+                <button onclick="clearCallLogs()" class="w-full bg-red-100 hover:bg-red-200 text-red-600 font-bold py-2 rounded-md transition mt-2">초기화</button>
+            </div>
+
+            <!-- Controls: Memo (Hidden) -->
+            <div id="controls-memo" class="space-y-4 hidden">
+                <h3 class="font-bold text-lg border-b pb-2">메모장 설정</h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">제목</label>
+                    <input type="text" id="memo-title" value="가계부" oninput="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">작성 날짜</label>
+                    <input type="text" id="memo-date" value="2025년 5월 15일 오후 4:20" oninput="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">내용</label>
+                    <textarea id="memo-content" rows="10" oninput="renderContent()" class="mt-1 block w-full border border-gray-300 rounded-md p-2" placeholder="메모 내용">5/1 세연 - 디올 립스틱
+5/10 세연 - 구찌 가방
+5/15 도준 - 합의금...</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Preview Area -->
+        <div id="preview-container" class="w-2/3 bg-gray-200 flex flex-col items-center justify-start pt-10 overflow-hidden relative">
+            <div id="preview-wrapper">
+                <!-- Live Preview Content (Scrollable for UX) -->
+                <div id="preview-content" class="w-full h-full bg-white relative phone-scroll overflow-y-auto">
+                    <!-- Dynamic Content Injected Here -->
+                </div>
+            </div>
+            
+            <div class="mt-4 text-gray-500 text-sm font-medium bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-sm z-10">
+                * 화면에 맞춰 자동 조절됨 (375pt 비율 유지)
+            </div>
+             <!-- Custom Message Box (Replaces alert/confirm) -->
+            <div id="custom-message-box" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-red-600 text-white p-4 rounded-lg shadow-xl z-50 text-center transition-opacity duration-300"></div>
+        </div>
+    </div>
+    
+    <script>
+        // --- State ---
+        let currentMode = 'messenger';
+        let messages = []; 
+        let callLogs = [];
+        let otherProfilePic = null; 
+
+        // --- Init ---
+        function initApp() {
+            // 초기 데이터 설정: memo-content의 기본값은 HTML 마크업에 직접 설정되어 있습니다.
+            // TypeError 방지를 위해 해당 라인 제거
+            // document.getElementById('memo-content').value = "5/1 세연 - 디올 립스틱\n5/10 세연 - 구찌 가방\n5/15 도준 - 합의금...";
+            
+            // 초기 렌더링 및 화면 맞춤
+            renderContent();
+            fitScreen();
+        }
+        
+        // --- Auto Fit Logic for Preview ---
+        function fitScreen() {
+            const container = document.getElementById('preview-container');
+            const wrapper = document.getElementById('preview-wrapper');
+            const margin = 60; 
+            const originalHeight = 667;
+            const availableHeight = container.clientHeight - margin;
+            let scale = availableHeight / originalHeight;
+            if(scale > 1) scale = 1; 
+            
+            // 화면 비율에 맞게 미리보기 크기 조절
+            wrapper.style.transform = `scale(${scale})`;
+        }
+
+        // --- Mode Switching ---
+        function setMode(mode) {
+            currentMode = mode;
+            ['messenger', 'call', 'memo'].forEach(m => {
+                const btn = document.getElementById(`btn-${m}`);
+                const controls = document.getElementById(`controls-${m}`);
+                
+                // 버튼 및 컨트롤 패널 가시성 토글
+                if (m === mode) {
+                    btn.classList.remove('text-gray-500', 'hover:bg-white');
+                    btn.classList.add('bg-white', 'shadow', 'text-gray-800');
+                    controls.classList.remove('hidden');
+                } else {
+                    btn.classList.add('text-gray-500', 'hover:bg-white');
+                    btn.classList.remove('bg-white', 'shadow', 'text-gray-800');
+                    controls.classList.add('hidden');
+                }
+            });
+            renderContent();
+        }
+        
+        // --- Main Renderer ---
+        function renderContent() {
+            const contentHTML = generateHTML();
+            let contentClass = '';
+            
+            // 1. Set classes based on mode
+            if (currentMode === 'messenger') {
+                // Fixed background color for Messenger
+                contentClass = "w-full h-full pt-4 pb-4 bg-[#bacee0] flex flex-col px-3"; 
+            } else if (currentMode === 'call') {
+                contentClass = "w-full h-full pt-10 bg-white";
+            } else if (currentMode === 'memo') {
+                // Fixed background color for Memo
+                contentClass = "w-full h-full pt-12 bg-[#fdfbf7] px-6";
+            }
+
+            // 2. Update Preview
+            const previewElement = document.getElementById('preview-content');
+            previewElement.className = contentClass + " phone-scroll overflow-y-auto";
+            previewElement.innerHTML = contentHTML;
+            
+            // 3. 스크롤을 맨 아래로 이동 (메신저 모드일 경우)
+            if (currentMode === 'messenger') {
+                 previewElement.scrollTop = previewElement.scrollHeight; 
+            }
+        }
+        
+        // --- HTML Generation Functions ---
+
+        function generateHTML() {
+            if (currentMode === 'messenger') return generateMessengerHTML();
+            if (currentMode === 'call') return generateCallLogHTML();
+            if (currentMode === 'memo') return generateMemoHTML();
+            return '';
+        }
+
+        function generateMessengerHTML() {
+            const otherName = document.getElementById('msg-name').value || "대화 상대";
+            let html = '';
+
+            messages.forEach(msg => {
+                const profileImgUrl = otherProfilePic;
+                const profileHtml = profileImgUrl ? 
+                    `<img src="${profileImgUrl}" class="profile-img-fit">` : 
+                    `<i class="fas fa-user text-white text-lg"></i>`;
+                
+                const bubbleText = msg.text.replace(/\n/g, '<br>');
+
+                if (msg.type === 'other') {
+                    // Left Alignment
+                    html += `
+                    <div class="flex w-full mb-3 items-start justify-start">
+                        <!-- Profile Area (Fixed width for stability) -->
+                        <div class="mr-2 shrink-0" style="width: 40px; height: 40px;">
+                            <div class="w-10 h-10 rounded-[16px] bg-[#d6dee6] flex items-center justify-center overflow-hidden border border-black/5">
+                                ${profileHtml}
+                            </div>
+                        </div>
+                        <!-- Content Area -->
+                        <div class="flex flex-col items-start" style="max-width: 75%;">
+                            <div class="text-[13px] text-gray-600 mb-1 ml-1 leading-none">${otherName}</div>
+                            <div class="flex items-end">
+                                <!-- V7: New class for better capture reliability -->
+                                <div class="bubble-other-v7">${bubbleText}</div>
+                                <span class="text-[10px] text-gray-500 ml-1.5 mb-0 min-w-[30px] whitespace-nowrap">${msg.time}</span>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                } else {
+                    // Right Alignment
+                    html += `
+                    <div class="flex w-full mb-3 items-end justify-end">
+                        <div class="flex items-end justify-end" style="max-width: 85%;">
+                            <span class="text-[10px] text-gray-500 mr-1.5 mb-0 text-right min-w-[30px] whitespace-nowrap">${msg.time}</span>
+                            <!-- V7: New class for better capture reliability -->
+                            <div class="bubble-me-v7">${bubbleText}</div>
+                        </div>
+                    </div>
+                    `;
+                }
+            });
+            return html;
+        }
+        
+        function generateCallLogHTML() {
+            let html = `
+                <!-- Sticky Header (Call Log Mode) -->
+                <div class="px-5 pt-4 pb-2 text-[32px] font-bold text-black bg-white" style="position: sticky; top: 0; z-index: 10;">최근 통화</div>
+                <div class="px-5 pb-2 text-sm font-semibold text-gray-800 bg-white border-b border-gray-200 flex space-x-6" style="position: sticky; top: 60px; z-index: 10;">
+                    <span class="border-b-2 border-black pb-2">전체</span>
+                </div>
+            `;
+            
+            html += '<div class="pl-5">'; 
+
+            callLogs.forEach(log => {
+                const isMissed = log.type === 'missed';
+                const textColor = isMissed ? 'text-[#ff3b30]' : 'text-black';
+                const icon = isMissed ? '<i class="fas fa-phone-slash mr-3 text-sm text-gray-400"></i>' : '<i class="fas fa-phone mr-3 text-sm text-gray-400"></i>';
+
+                html += `
+                    <div class="flex items-center py-3 pr-4 border-b border-gray-100 bg-white min-h-[60px]">
+                        <div class="flex-1 min-w-0 flex items-center">
+                            ${icon}
+                            <div class="truncate">
+                                <div class="font-bold ${textColor} text-[17px] leading-tight truncate">${log.name}</div>
+                                <div class="text-[13px] text-gray-500 mt-0.5 truncate">${log.label}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2 shrink-0 ml-2">
+                            <span class="text-[15px] text-gray-400 font-normal">${log.time}</span>
+                            <i class="far fa-user-circle text-blue-500 text-xl ml-2"></i> 
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function generateMemoHTML() {
+            const title = document.getElementById('memo-title').value;
+            const date = document.getElementById('memo-date').value;
+            const content = document.getElementById('memo-content').value;
+
+            return `
+                <div class="flex justify-between items-center mb-6 mt-2 px-1">
+                     <div class="text-[#e0a826] font-bold text-lg flex items-center"><i class="fas fa-chevron-left mr-1 text-base"></i> 메모</div>
+                     <div class="text-[#e0a826] font-bold text-lg">완료</div>
+                </div>
+                <h1 class="text-[30px] font-bold text-gray-900 mb-2 leading-tight tracking-tight">${title}</h1>
+                <div class="text-gray-400 text-[13px] mb-6 font-medium">${date}</div>
+                <div class="text-gray-800 text-[17px] leading-relaxed whitespace-pre-wrap font-normal">${content}</div>
+            `;
+        }
+
+        // --- Data Manipulation Functions ---
+
+        function handleProfileUpload(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    otherProfilePic = e.target.result;
+                    renderContent();
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function addMessage() {
+            const text = document.getElementById('msg-text').value;
+            const time = document.getElementById('msg-time').value;
+            const senderType = document.querySelector('input[name="sender"]:checked').value;
+            if(!text) {
+                showCustomMessage("메시지 내용을 입력해주세요.");
+                return;
+            }
+            messages.push({ text, time, type: senderType });
+            renderContent();
+            document.getElementById('msg-text').value = '';
+        }
+
+        function clearMessages() {
+            messages = [];
+            renderContent();
+            showCustomMessage("메시지가 초기화되었습니다.");
+        }
+        
+        function addCallLog() {
+            const name = document.getElementById('call-name').value;
+            const type = document.getElementById('call-type').value; 
+            const time = document.getElementById('call-time').value;
+            const label = document.getElementById('call-label').value;
+             if(!name) {
+                showCustomMessage("이름/번호를 입력해주세요.");
+                return;
+            }
+            callLogs.push({ name, type, time, label });
+            renderContent();
+            showCustomMessage("통화 기록이 추가되었습니다.");
+        }
+
+        function clearCallLogs() {
+            callLogs = [];
+            renderContent();
+            showCustomMessage("통화 기록이 초기화되었습니다.");
+        }
+
+        // --- Custom Message Box (Replaces alert/confirm) ---
+        function showCustomMessage(message) {
+            const container = document.getElementById('preview-container');
+            let messageBox = document.getElementById('custom-message-box');
+
+            if (!messageBox) {
+                return; 
+            }
+            messageBox.textContent = message;
+            messageBox.style.opacity = '1';
+            messageBox.style.pointerEvents = 'auto';
+
+            setTimeout(() => {
+                messageBox.style.opacity = '0';
+                messageBox.style.pointerEvents = 'none';
+            }, 3000);
+        }
+
+        // --- FINAL Download Logic (V7: Scaling logic from V6, new filename) ---
+        async function downloadImage() {
+            const wrapper = document.getElementById('preview-wrapper');
+            const previewContent = document.getElementById('preview-content');
+
+            // 1. 현재 화면에 적용된 Live Scale 값을 계산
+            const style = window.getComputedStyle(wrapper);
+            const transform = style.getPropertyValue('transform');
+            let currentScale = 1;
+            if (transform && transform !== 'none') {
+                const matrix = transform.match(/matrix.*\((.+)\)/);
+                if (matrix && matrix[1]) {
+                    const values = matrix[1].split(', ');
+                    currentScale = parseFloat(values[0]); 
+                }
+            }
+            
+            // 2. 캡처를 위한 DOM 상태 저장
+            const originalOverflow = previewContent.style.overflowY;
+            const originalWrapperHeight = wrapper.style.height;
+            const originalWrapperTransform = wrapper.style.transform;
+            
+            // 3. 내용물 전체 높이를 계산하여 캡처 대상의 높이를 확장
+            const actualContentHeight = previewContent.scrollHeight;
+            
+            try {
+                // 핵심: Live Scale을 유지한 채 캡처 대상의 높이를 내용물 전체에 맞게 확장
+                wrapper.style.height = `${actualContentHeight / currentScale}px`;
+                previewContent.style.overflowY = 'hidden'; // 스크롤바 숨김
+                
+                // 4. 캡처 실행 (최종 결과물 750px = 375px * 2)
+                // finalScale = 2 / currentScale : 캡처 라이브러리가 DPI 보정을 위해 적용할 최종 스케일
+                const finalScale = 2 / currentScale;
+
+                const canvas = await html2canvas(wrapper, { 
+                    scale: finalScale, 
+                    useCORS: true,
+                    backgroundColor: null, 
+                    logging: false,
+                    width: wrapper.offsetWidth, 
+                    height: wrapper.offsetHeight, 
+                });
+                
+                // 5. 다운로드 실행
+                const link = document.createElement('a');
+                link.download = `x_chase_asset_${currentMode}_v7.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+                showCustomMessage("이미지 저장이 완료되었습니다! (V7 - 신규 버전)");
+                
+            } catch (error) {
+                console.error("이미지 캡처 중 오류가 발생했습니다:", error);
+                showCustomMessage("이미지 저장 중 오류가 발생했습니다. (콘솔 확인)"); 
+            } finally {
+                // 6. 원상 복구
+                previewContent.style.overflowY = originalOverflow; 
+                wrapper.style.height = originalWrapperHeight; 
+                wrapper.style.transform = originalWrapperTransform;
+            }
+        }
+    </script>
+</body>
+</html>
